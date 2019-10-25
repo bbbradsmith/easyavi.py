@@ -21,11 +21,6 @@
 # Notes:
 #
 #   AVI is uncompressed RGB. File size will be large.
-#
-#   File size larger than 2GB is supported, though it uses old style indexing
-#   which may cause the frames past ~2GB may be ignored by some programs,
-#   like Virtualdub. (Open-DML index chunks could fix this, but didn't seem
-#   worth implementing.)
 
 import sys
 assert sys.version_info[0] == 3, "Python 3 required."
