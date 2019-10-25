@@ -184,31 +184,14 @@ class EasyAvi:
 
     # compressed MSRLE24 encoder
 
+    def pixel_to_bgr(pixel):
+        return [pixel[2],pixel[1],pixel[0]]
+    
     def row_rle(ipixel,ppixel,w,y):
         data = []
         read = y * w # pixels already encoded
         pos = read # pixels currently investigated
         end = pos + w
-        # count consecutive pixels that are equal starting at i
-        def runlength(i):
-            nonlocal ipixel
-            p = ipixel[i]
-            count = 1
-            while (i+count) < end and p == ipixel[i+count]:
-                count += 1
-            return min(count,255)
-        # count consecutive delta pixels starting at i
-        def matchlength(i):
-            nonlocal ipixel, ppixel
-            if ppixel == None:
-                return 0
-            count = 0
-            while (i+count) < end and ipixel[i+count] == ppixel[i+count]:
-                count += 1
-            return count
-        # generate BGR triple
-        def bgr(pixel):
-            return [pixel[2],pixel[1],pixel[0]]
         # generate absolute packet to catch up to position
         def emit_absolute():
             nonlocal pos, read, ipixel, data
@@ -218,7 +201,7 @@ class EasyAvi:
             if abslen < 3:
                 while read < pos:
                     data.append(1)
-                    data += bgr(ipixel[read])
+                    data += EasyAvi.pixel_to_bgr(ipixel[read])
                     read += 1
                 return
             abslen = min(abslen,255)
@@ -226,19 +209,33 @@ class EasyAvi:
             data.append(abslen)
             target = read + abslen
             while read < target:
-                data += bgr(ipixel[read])
+                data += EasyAvi.pixel_to_bgr(ipixel[read])
                 read += 1
             #if (abslen & 1): RLE8 pads to word, but not RLE24, apparently?
             #    data.append(0)
             emit_absolute() # recurse, in case it was more than 255
         # scan through row and encode
         while (pos < end):
-            match = matchlength(pos)
-            run = runlength(pos)
+            # count consecutive delta pixels
+            match = 0
+            if not ppixel == None:
+                for i in range(pos,end):
+                    if ipixel[i] != ppixel[i]:
+                        break
+                    match += 1
+            # count consecutive matching pixels
+            p = ipixel[pos]
+            run = 1
+            for i in range(pos+1,end):
+                if ipixel[i] != p:
+                    break
+                run += 1
+            run = min(run,255)
+            # decide whether to emit a match, run, or collect raw bytes for absolute encoding
             if (run > match) and (run > 1):
                 emit_absolute()
                 data.append(run)
-                data += bgr(ipixel[pos])
+                data += EasyAvi.pixel_to_bgr(ipixel[pos])
                 read += run
                 pos += run
             elif match > 1:
