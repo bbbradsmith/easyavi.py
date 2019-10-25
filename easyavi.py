@@ -160,6 +160,7 @@ class EasyAvi:
         assert(self.open)
         if (self.segment_size + len(bgr) + 8) >= EasyAvi.SEGMENT_MAX:
             self.write_suffix()
+            self.write_prefix()
         fcc = "00db"
         self.write_fcc(fcc)
         self.f.write(struct.pack("<L",len(bgr)))
