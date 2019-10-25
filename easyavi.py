@@ -176,7 +176,7 @@ class EasyAvi:
 
     def write_frame_raw(self,img):
         stride = img.width * 3
-        if stride & 3:
+        if stride & 3: # pad each line to 4 byte boundary
             stride += 4 - (stride & 3)
         bgr = img.tobytes("raw","BGR", stride, -1)
         assert(self.open)
@@ -279,6 +279,7 @@ class EasyAvi:
         # pad to 4 byte boundary
         while (len(data) & 3):
             data.append(0)
+        # retain last image for delta comparison
         if self.previous == None:
             self.previous = img.copy()
         else:
