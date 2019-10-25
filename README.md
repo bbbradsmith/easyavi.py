@@ -3,7 +3,8 @@
 Simple way to write an AVI from a series of PIL images.
 
 No sound or codecs or other complicated dependencies,
-just a video-only AVI series of images, uncompressed.
+just a video-only AVI series of images, either uncompressed
+or with simple RLE compression.
 
 Example:
 
