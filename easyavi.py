@@ -20,6 +20,8 @@
 
 # Notes:
 #
+#   Tested with PIL 5.4.1
+#
 #   AVI is uncompressed RGB. File size will be large.
 #
 #   File size is unlimited. Internal file segments will split at around 2GB.
@@ -197,7 +199,10 @@ class EasyAvi:
         """Writes a PIL.Image as the next frame."""
         assert(img.width==self.w)
         assert(img.height==self.h)
-        bgr = img.convert("BGR;24").transpose(PIL.Image.FLIP_TOP_BOTTOM).tobytes()
+        stride = img.width * 3
+        if stride & 3:
+            stride += 4 - (stride & 3)
+        bgr = img.tobytes("raw","BGR", stride, -1)
         self.write_frame(bgr)
 
     def close(self):
