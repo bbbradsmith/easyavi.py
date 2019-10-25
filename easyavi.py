@@ -21,6 +21,8 @@
 # Notes:
 #
 #   AVI is uncompressed RGB. File size will be large.
+#
+#   File size is unlimited. Internal file segments will split at around 2GB.
 
 import sys
 assert sys.version_info[0] == 3, "Python 3 required."
