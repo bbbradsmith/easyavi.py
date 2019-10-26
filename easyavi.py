@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # easyavi.py
-# Version 2
+# Version 3
 # Brad Smith, 2019
 # http://rainwarrior.ca
 #
@@ -18,25 +18,26 @@
 # ...
 # a.close()
 #
-# easyavi.open() with parameter rle=True will use RLE encoding,
+# easyavi.series() will instead create a series of AVI files with a 3 digit suffix,
+# splitting automatically when the each file approaches a split length.
+# Useful if you need very large files.
+#
+# easyavi.open()/series() with parameter rle=True will use RLE encoding,
 # which is drastically smaller for images with rows of flat colour,
 # or sequences where only part of the image changes.
-# The encoding, however, is fairly slow.
+# The encoding, however, is slower.
 
 # Notes:
 #
-#   Tested with PIL 5.4.1
+#  Tested with PIL 5.4.1
 #
-#   AVI is uncompressed RGB. File size will be large.
-#   open() with rle=True will use RLE encoding, which can be much smaller, but is slower.
+#  AVI is uncompressed RGB. File size will be large.
+#  open() with rle=True will use RLE encoding, which can be much smaller, but is slower.
 #
-#   File size is limited to 4GB. Some players will have trouble over 2GB or possibly 1GB.
-#   The .write() function returns the current file position. You may wish to monitor
-#   this, and then .close() and reopen a new file to continue when it approaches the
-#   file size you wish to avoid. Leave some headroom, as .close() needs to store a
-#   data suffix with indices. Proper long file support would require OpenDML index chunks,
-#   which seemed too complex to be worthwhile.
-
+#  Individual file size is limited to 4GB. Some players will have trouble over 2GB or possibly 1GB.
+#  The .write() function returns the current file position, which you could monitor.
+#  The easyavi.series() provides automatic splitting at a preset file length.
+#  Proper long file support would require OpenDML index chunks, which seemed more complex than worthwhile.
 
 import sys
 assert sys.version_info[0] == 3, "Python 3 required."
@@ -48,6 +49,7 @@ import builtins
 class EasyAvi:
 
     KEYFRAME_TIME = 10 # seconds per keyframe in RLE mode
+    SERIES_SPLIT = (4*(1<<30)) - (64*(1<<20)) # when to split series (leaves some room for last frame)
 
     def write_fcc(self,name):
         assert(len(name)==4)
@@ -70,7 +72,7 @@ class EasyAvi:
         self.f.seek(0,2) # return to end
 
     def write_prefix(self):
-        assert(self.open)
+        assert(self.opened)
         assert(len(self.riff_fixup) == 0) # top level
         frame_size = self.w * self.h * 3
         frame_extra = (frame_size//64) if self.rle else 0 # overhead for worst case compression failure
@@ -143,7 +145,7 @@ class EasyAvi:
         self.index_pos = 4
 
     def write_suffix(self):
-        assert(self.open)
+        assert(self.opened)
         # close movi list
         self.pop_riff()
         # idx1 chunk
@@ -179,7 +181,7 @@ class EasyAvi:
         if stride & 3: # pad each line to 4 byte boundary
             stride += 4 - (stride & 3)
         bgr = img.tobytes("raw","BGR", stride, -1)
-        assert(self.open)
+        assert(self.opened)
         return self.write_frame_chunk("00db",0x10,bgr)
 
     # compressed MSRLE24 encoder
@@ -285,26 +287,46 @@ class EasyAvi:
 
     # constructor/destructor
 
-    def __init__(self, file_handle, w, h, fps, rle):
-        self.f = file_handle
+    def __init__(self, w, h, fps, rle, series_prefix=None):
         self.w = w
         self.h = h
         self.fps = fps
         self.rle = rle
-        self.open = True
+        self.f = None
+        self.opened = False
+        self.series_prefix = series_prefix
+        self.series_count = 0
+
+    def __del__(self):
+        self.close()
+
+    # public interface
+
+    def open(self,filename):
+        """Opens a new AVI file."""
+        self.f = builtins.open(filename,"wb")
+        self.opened = True
         self.frames = 0
         self.riff_fixup = []
         self.frames_fixup = []
         self.indices = []
         self.index_pos = 0
         self.previous = None
-        self.keyrate = fps * EasyAvi.KEYFRAME_TIME
+        self.keyrate = self.fps * EasyAvi.KEYFRAME_TIME
         self.write_prefix()
+        return self
 
-    def __del__(self):
+    def open_series(self):
+        """Opens next file in AVI series."""
+        assert(self.series_prefix != None)
         self.close()
+        filename = self.series_prefix + ("%03d" % self.series_count) + ".avi"
+        self.series_count += 1
+        return self.open(filename)
 
-    # public interface
+    def size(self):
+        """File size if closed now."""
+        return self.f.tell() + 8 + (16 * len(self.indices))
 
     def write(self,img):
         """Writes a PIL.Image as the next frame. Returns current file length."""
@@ -316,16 +338,24 @@ class EasyAvi:
             index = self.write_frame_rle(img)
         self.indices.append(index)
         self.frames += 1
-        return self.f.tell()
+        size = self.size()
+        if (self.series_prefix != None) and (size > EasyAvi.SERIES_SPLIT):
+            self.open_series()
+            return self.size()
+        else:
+            return size
 
     def close(self):
         """Finishes writing to disk and closes AVI file."""
-        if (self.open):
+        if (self.opened):
             self.write_suffix()
             self.f.close()
-            self.open = False
+            self.opened = False
 
 def open(filename, w, h, fps, rle=False):
     """Opens an AVI file for writing."""
-    f = builtins.open(filename,"wb")
-    return EasyAvi(f,w,h,fps,rle)
+    return EasyAvi(w,h,fps,rle).open(filename)
+
+def series(filename_prefix, w, h, fps, rle=False):
+    """Opens a series of AVI files prefix###.avi for writing."""
+    return EasyAvi(w,h,fps,rle,filename_prefix).open_series()
