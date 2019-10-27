@@ -259,6 +259,10 @@ class EasyAvi:
         data.append(0)
         data.append(0)
         return data
+        # Note: this could be a bit more optimal (e.g. multiple empty lines
+        # could be encoded with a single skip entry) but this relaxed implementation
+        # already gets the bulk of the potential compression. If optimal size is needed,
+        # better to just re-encode later with a superior lossless codec (e.g. ZMBV, Lagarith).
 
     def write_frame_rle(self,img): # MSRLE 24
         if self.previous == None or (self.frames % self.keyrate) == 0:
